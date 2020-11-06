@@ -54,6 +54,7 @@ def check_loaded(pixel, color):
             break
     time.sleep(1)
 
+
 def login():
 
     # 对于Windows中自带应用程序，直接执行，对于外部应用应输入完整路径
@@ -79,7 +80,7 @@ def login():
     time.sleep(1)
     mouse.click(coords=D_COORD["分析报表-同比发货趋势分析"])
     # time.sleep(10)
-    check_loaded(D_COORD['判断色块_加载'], (255, 0, 0))
+    check_loaded(D_COORD["判断色块_加载"], (255, 0, 0))
 
 
 def get_data_url(product, metric):
@@ -104,9 +105,9 @@ def get_data_url(product, metric):
         time.sleep(1)
 
     mouse.click(coords=D_COORD["查询"])
-    check_loaded(D_COORD['判断色块_加载'], (255, 0, 0))
+    check_loaded(D_COORD["判断色块_加载"], (255, 0, 0))
     mouse.click(coords=D_COORD["导出"])
-    check_loaded(D_COORD['判断色块_导出'], (0, 0, 132))
+    check_loaded(D_COORD["判断色块_导出"], (0, 0, 132))
     mouse.click(coords=D_COORD["复制导出链接"])
     time.sleep(1)
     mouse.click(coords=D_COORD["导出成功-确定"])
@@ -121,7 +122,7 @@ def get_data_url(product, metric):
     excel_file.close()
 
 
-def repair_excel():  # CRM系统下载的xlsx有错误，不能使用任何类似xlrd的python excel包处理，要先修复
+def repair_excel(product):  # CRM系统下载的xlsx有错误，不能使用任何类似xlrd的python excel包处理，要先修复
     # Excel xlsx文件实际上是个zip文件，用zipFile包读取里面实际存放数据的sheet1.xml文件
     with zipfile.ZipFile("downloaded.xlsx", "r") as zbad:
         sheet_xml = zbad.read("sheet1.xml")
@@ -146,7 +147,9 @@ def repair_excel():  # CRM系统下载的xlsx有错误，不能使用任何类�
             list_index.append(cell_to_timestamp(k))  # 将原字典的key从行列字符串转换为日期
 
     df = pd.Series(list_value, index=list_index)  # 转换为pandas series
+    df.name = product
     df = df.sort_index()  # dataframe日期排序
+
     return df
 
 
@@ -164,12 +167,32 @@ def cell_to_timestamp(cell_cr):  # 根据单元格行列字符串转换到对应
 if __name__ == "__main__":
     year = 2020
     month = 10
-    product_list = ["泰嘉", "泰加宁", "信立坦", "信达怡", "泰仪"]
-    metric_list = ["金额", "数量"]
+    # product_list = ["泰嘉", "泰加宁"]
+    # metric_list = ["金额", "数量"]
+    product_list = ["信立坦"]
+    metric_list = ["金额"]
 
     login()
-    # for product in product_list:
-    #     for metric in metric_list:
-    #         get_data_url(product, metric)
-    #         df = repair_excel()
-    #         liner_forecast(df, year, month, product, metric)
+
+    now = datetime.now().strftime("%Y%m%d%H%M%S")
+    writer = pd.ExcelWriter("data/" + now + ".xlsx", engine="xlsxwriter")
+    for i, product in enumerate(product_list):
+        for metric in metric_list:
+            get_data_url(product, metric)
+            df = repair_excel(product)
+            if i == 0:
+                show_index = True
+                start_col = i
+            else:
+                show_index = False
+                start_col = i + 1
+            df.to_excel(writer, sheet_name=metric, startrow=0, startcol=start_col, index=show_index)
+            liner_forecast(
+                df,
+                year,
+                month,
+                product,
+                metric,
+                timestamp=datetime.strptime(now, "%Y%m%d%H%M%S").strftime("%Y-%m-%d %H:%M:%S"),
+            )
+    writer.save()
